@@ -97,3 +97,27 @@ def username_of(user_id):
     if u:
         return u.get("display_name") or u.get("username")
     return None
+
+
+def enrich_issue_names(docs):
+    """Attach assignee_name / reporter_name to serialized issue docs (one query)."""
+    ids = set()
+    for d in docs:
+        for f in ("assignee_id", "reporter_id"):
+            if d.get(f):
+                ids.add(str(d[f]))
+    if not ids:
+        return docs
+    db = get_db()
+    from bson import ObjectId as _OID
+    try:
+        users = {str(u["_id"]): (u.get("display_name") or u.get("username"))
+                 for u in db.users.find({"_id": {"$in": [_OID(i) for i in ids]}},
+                                        {"display_name": 1, "username": 1})}
+    except Exception:
+        return docs
+    for d in docs:
+        d["assignee_name"] = users.get(str(d.get("assignee_id"))) if d.get("assignee_id") else None
+        d["reporter_name"] = users.get(str(d.get("reporter_id"))) if d.get("reporter_id") else None
+    return docs
+

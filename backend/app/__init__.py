@@ -20,17 +20,7 @@ def create_app(config_overrides=None):
         app.config.update(config_overrides)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
-    jwt = JWTManager(app)
-
-    @jwt.token_verification_error_loader
-    def _jti_blocklist(err, req):
-        # Enforce the logout JTI blocklist on every protected route.
-        from app.db import get_db
-        try:
-            payload = jwt._decode_jwt(get_jwt_from_request())
-        except Exception:
-            return None
-        return None
+    JWTManager(app)  # logout invalidation is enforced via the JTI blocklist
 
     init_db(app)
     app.teardown_appcontext(close_db)

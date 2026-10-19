@@ -142,6 +142,15 @@ def update_project(pid):
     return {"project": serialize(find_project(pid))}, 200
 
 
+@projects_bp.get("/all-users")
+@jwt_required()
+def all_users():
+    """Minimal user directory (id, username, display_name) for admin pickers."""
+    db = get_db()
+    users = db.users.find({}, {"username": 1, "display_name": 1})
+    return {"users": serialize(list(users))}, 200
+
+
 @projects_bp.post("/<pid>/members")
 @jwt_required()
 def add_member(pid):

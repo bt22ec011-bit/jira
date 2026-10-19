@@ -18,6 +18,7 @@ from pymongo.errors import DuplicateKeyError
 from app.db import get_db
 from app.utils.helpers import (
     oid, serialize, find_project, get_membership, can_view_project, actor_name,
+    enrich_issue_names,
 )
 from app.services.workflow import TransitionError, validate_transition, diff_activity
 
@@ -108,7 +109,7 @@ def list_issues():
                 .skip((page - 1) * per_page)
                 .limit(per_page))
     return {
-        "items": serialize(docs),
+        "items": enrich_issue_names(serialize(docs)),
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -158,7 +159,7 @@ def get_issue(iid):
     project = find_project(issue["project_id"])
     if not project or not can_view_project(project, uid, role):
         return {"error": "You are not a member of this project"}, 403
-    out = serialize(issue)
+    out = enrich_issue_names([serialize(issue)])[0]
     out["my_role"] = (get_membership(project, uid) or {}).get("role") or ("admin" if role == "admin" else None)
     return {"issue": out}, 200
 
@@ -243,7 +244,7 @@ def create_issue():
     except DuplicateKeyError:
         return {"error": "Issue key collision, please retry"}, 409
     doc["_id"] = res.inserted_id
-    return {"issue": serialize(doc)}, 201
+    return {"issue": enrich_issue_names([serialize(doc)])[0]}, 201
 
 
 # --- Update (fields; state handled via /transition) ------------------------------
@@ -335,7 +336,7 @@ def update_issue(iid):
         ops["$push"] = {"activity": {"$each": entries}}
 
     db.issues.update_one({"_id": issue["_id"]}, ops)
-    return {"issue": serialize(db.issues.find_one({"_id": issue["_id"]}))}, 200
+    return {"issue": enrich_issue_names([serialize(db.issues.find_one({"_id": issue["_id"]}))])[0]}, 200
 
 
 # --- Dedicated transition endpoint (used by Kanban drag & drop) -------------------
@@ -373,7 +374,7 @@ def transition_issue(iid):
         {"$set": {"state": to_state, "updated_at": datetime.now(timezone.utc)},
          "$push": {"activity": {"$each": entries}}},
     )
-    return {"issue": serialize(db.issues.find_one({"_id": issue["_id"]}))}, 200
+    return {"issue": enrich_issue_names([serialize(db.issues.find_one({"_id": issue["_id"]}))])[0]}, 200
 
 
 # --- Comments with @mentions -------------------------------------------------------
@@ -430,7 +431,7 @@ def add_comment(iid):
          "$set": {"updated_at": datetime.now(timezone.utc)}},
     )
     return {"comment": serialize(comment),
-            "issue": serialize(db.issues.find_one({"_id": issue["_id"]}))}, 201
+            "issue": enrich_issue_names([serialize(db.issues.find_one({"_id": issue["_id"]}))])[0]}, 201
 
 
 # --- Activity feed (append-only; no edit/delete endpoints exist) --------------------
