@@ -17,13 +17,20 @@ class RevokedJTIError(Exception):
     pass
 
 
+auth_bp = Blueprint("auth", __name__)
+
+
 def _guard_jti():
     """Raise if the current token's JTI is on the logout blocklist."""
     jti = get_jwt()["jti"]
     if is_blocked(jti):
         raise RevokedJTIError("Token has been revoked")
 
-auth_bp = Blueprint("auth", __name__)
+
+@auth_bp.errorhandler(RevokedJTIError)
+def _revoked(e):
+    return {"error": "Token has been revoked (logged out)"}, 401
+
 
 
 def _user_public(u):
